@@ -2,7 +2,7 @@
 //  api.js — Centralized API client for NexGen V2
 // ============================================================
 
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = window.NEXGEN_API || 'https://nexgen-ecommercesite-v2-production.up.railway.app/api';
 
 const Api = {
   // ── Auth helpers ──
