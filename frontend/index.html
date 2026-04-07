@@ -6,6 +6,9 @@
   <meta name="description" content="John Rey's NexGen Shop — Pokémon figures, electronics, fashion and more. Free shipping on orders ₱500+."/>
   <title>John Rey's NexGen Shop</title>
   <link rel="stylesheet" href="style.css"/>
+  <link rel="manifest" href="manifest.json"/>
+  <meta name="theme-color" content="#e63946"/>
+  <link rel="apple-touch-icon" href="assets/icon-192.png"/>
 </head>
 <body>
 
@@ -154,6 +157,11 @@
   }
   tick(); setInterval(tick, 1000);
 })();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
 </script>
 </body>
 </html>
