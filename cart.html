@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Cart — NexGen Shop</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .cart-layout { display:grid; grid-template-columns:1fr 340px; gap:24px; align-items:start; }
+    @media(max-width:900px){ .cart-layout { grid-template-columns:1fr; } }
+    .cart-item { display:grid; grid-template-columns:80px 1fr auto; gap:16px; align-items:center; padding:16px 0; border-bottom:1px solid var(--dark4); }
+    .cart-item-img { width:80px; height:80px; background:var(--dark); border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+    .cart-item-img img { width:100%; height:100%; object-fit:contain; }
+    .cart-item-name { font-size:14px; font-weight:600; margin-bottom:4px; }
+    .cart-item-var  { font-size:12px; color:var(--dim); margin-bottom:8px; }
+    .cart-item-price{ font-size:15px; color:var(--red); font-weight:bold; }
+    .qty-ctrl { display:flex; align-items:center; border:1px solid var(--dark4); border-radius:var(--radius); overflow:hidden; width:fit-content; }
+    .qty-ctrl button { background:var(--dark4); border:none; color:var(--text); width:32px; height:32px; font-size:16px; cursor:pointer; }
+    .qty-ctrl button:hover { background:var(--dark); }
+    .qty-ctrl input { width:44px; background:transparent; border:none; color:var(--text); text-align:center; font-size:14px; outline:none; }
+    .remove-btn { background:none; border:none; color:var(--dim); font-size:18px; cursor:pointer; padding:4px; }
+    .remove-btn:hover { color:var(--red); }
+    .summary-row { display:flex; justify-content:space-between; font-size:14px; margin-bottom:10px; }
+    .summary-row.total { font-size:17px; font-weight:bold; color:var(--text); border-top:1px solid var(--dark4); padding-top:12px; margin-top:4px; }
+    .coupon-row { display:flex; gap:8px; margin:16px 0; }
+    .coupon-row input { flex:1; }
+    .discount-msg { font-size:12px; color:var(--green); margin-top:4px; }
+    .free-ship-tag { background:var(--green); color:#000; font-size:11px; font-weight:bold; padding:2px 8px; border-radius:4px; }
+  </style>
+</head>
+<body>
+<div id="navbar-root"></div>
+<div class="page-wrap">
+  <div class="breadcrumb"><a href="index.html">Home</a> › <span>Cart</span></div>
+  <div class="sec-header" style="margin-bottom:20px">
+    <div class="sec-title">🛒 MY CART</div>
+    <a href="products.html" class="sec-link">← Continue Shopping</a>
+  </div>
+
+  <div id="cartRoot">
+    <div class="loading-center"><div class="spinner"></div></div>
+  </div>
+</div>
+<div id="footer-root"></div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/components.js"></script>
+<script>
+let cartItems  = [];
+let couponData = null;
+const SHIPPING_THRESHOLD = 500;
+const SHIPPING_FEE       = 99;
+
+async function init() {
+  await Components.init('cart');
+  if (!Auth.isLoggedIn()) {
+    renderGuest();
+    return;
+  }
+  await loadCart();
+}
+
+async function loadCart() {
+  try {
+    cartItems = await Api.cart.get();
+    renderCart();
+  } catch {
+    document.getElementById('cartRoot').innerHTML = '<p style="color:var(--dim);text-align:center;padding:40px">Could not load cart.</p>';
+  }
+}
+
+function renderGuest() {
+  document.getElementById('cartRoot').innerHTML = `
+<div class="empty-state">
+  <div class="empty-icon">🛒</div>
+  <h3>Login to View Your Cart</h3>
+  <p>Your cart is saved across devices when you're logged in.</p>
+  <a href="profile.html?redirect=cart.html" class="btn-primary">Login / Register</a>
+</div>`;
+}
+
+function renderCart() {
+  if (!cartItems.length) {
+    document.getElementById('cartRoot').innerHTML = `
+<div class="empty-state">
+  <div class="empty-icon">🛒</div>
+  <h3>Your Cart is Empty</h3>
+  <p>Add some products to get started!</p>
+  <a href="products.html" class="btn-primary">🛍️ Shop Now</a>
+</div>`;
+    return;
+  }
+
+  const subtotal   = cartItems.reduce((s,i) => s + i.price * i.quantity, 0);
+  const shipping   = couponData?.freeship || subtotal >= SHIPPING_THRESHOLD ? 0 : SHIPPING_FEE;
+  const discount   = couponData?.discount || 0;
+  const total      = Math.max(0, subtotal + shipping - discount);
+
+  document.getElementById('cartRoot').innerHTML = `
+<div class="cart-layout">
+  <div class="panel">
+    <div class="panel-title">ORDER ITEMS (${cartItems.length})</div>
+    <div id="itemsList">
+      ${cartItems.map(item => `
+      <div class="cart-item" id="item-${item.id}">
+        <div class="cart-item-img">
+          ${item.image ? `<img src="assets/${item.image}" alt="${Components._esc(item.name)}" onerror="this.style.display='none'">` : Components._catEmoji(item.category)}
+        </div>
+        <div>
+          <div class="cart-item-name">${Components._esc(item.name)}</div>
+          <div class="cart-item-var">${item.variation !== 'default' ? Components._esc(item.variation) : ''}</div>
+          <div class="cart-item-price">₱${Number(item.price).toLocaleString()} ea.</div>
+          <div class="qty-ctrl" style="margin-top:8px">
+            <button onclick="updateQty(${item.id}, ${item.quantity - 1})">−</button>
+            <input type="number" value="${item.quantity}" min="1"
+                   onchange="updateQty(${item.id}, parseInt(this.value)||1)" style="width:44px">
+            <button onclick="updateQty(${item.id}, ${item.quantity + 1})">+</button>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:15px;font-weight:bold;color:var(--red);margin-bottom:8px">
+            ₱${Number(item.price * item.quantity).toLocaleString()}
+          </div>
+          <button class="remove-btn" onclick="removeItem(${item.id})">🗑️</button>
+        </div>
+      </div>`).join('')}
+    </div>
+    <button class="btn-outline w-full mt-16" onclick="clearCart()" style="color:var(--dim)">🗑️ Clear Cart</button>
+  </div>
+
+  <!-- SUMMARY -->
+  <div>
+    <div class="panel" style="position:sticky;top:80px">
+      <div class="panel-title">ORDER SUMMARY</div>
+
+      <div class="summary-row"><span>Subtotal</span><span>₱${Number(subtotal).toLocaleString()}</span></div>
+      <div class="summary-row">
+        <span>Shipping</span>
+        <span>${shipping === 0 ? '<span class="free-ship-tag">FREE</span>' : '₱'+shipping}</span>
+      </div>
+      ${discount ? `<div class="summary-row" style="color:var(--green)"><span>Discount (${couponData.code})</span><span>-₱${Number(discount).toLocaleString()}</span></div>` : ''}
+      <div class="summary-row total"><span>Total</span><span>₱${Number(total).toLocaleString()}</span></div>
+
+      ${subtotal < SHIPPING_THRESHOLD && !couponData?.freeship ? `
+      <div style="font-size:12px;color:var(--gold);margin:8px 0">
+        Add ₱${(SHIPPING_THRESHOLD - subtotal).toLocaleString()} more for FREE shipping!
+      </div>` : ''}
+
+      <!-- Coupon -->
+      <div class="coupon-row">
+        <input type="text" id="couponInput" class="form-control" placeholder="Coupon code" style="text-transform:uppercase">
+        <button class="btn-outline" onclick="applyCoupon()">Apply</button>
+      </div>
+      ${couponData ? `<p class="discount-msg">✓ ${Components._esc(couponData.description)}</p>` : ''}
+      ${couponData ? `<button class="btn-sm btn-outline" onclick="removeCoupon()" style="margin-bottom:8px">Remove coupon</button>` : ''}
+
+      <button class="btn-primary w-full" onclick="goCheckout()" style="font-size:15px;padding:14px;margin-top:8px">
+        Checkout →
+      </button>
+      <div style="text-align:center;font-size:12px;color:var(--dim);margin-top:10px">
+        🛡️ Secure checkout • COD available
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+async function updateQty(id, qty) {
+  if (qty < 1) { removeItem(id); return; }
+  try {
+    await Api.cart.update(id, { quantity: qty });
+    const item = cartItems.find(i => i.id === id);
+    if (item) item.quantity = qty;
+    renderCart();
+    await Components.updateCartBadge();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function removeItem(id) {
+  try {
+    await Api.cart.remove(id);
+    cartItems = cartItems.filter(i => i.id !== id);
+    renderCart();
+    await Components.updateCartBadge();
+    showToast('Item removed.');
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function clearCart() {
+  if (!confirm('Clear all items?')) return;
+  try {
+    await Api.cart.clear();
+    cartItems = [];
+    renderCart();
+    await Components.updateCartBadge();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function applyCoupon() {
+  const code     = document.getElementById('couponInput')?.value.trim().toUpperCase();
+  if (!code) return;
+  const subtotal = cartItems.reduce((s,i) => s + i.price * i.quantity, 0);
+  try {
+    couponData = await Api.coupons.validate({ code, subtotal });
+    couponData.code = code;
+    renderCart();
+  } catch (err) {
+    showToast(err.message || 'Invalid coupon.', 'error');
+  }
+}
+
+function removeCoupon() { couponData = null; renderCart(); }
+
+function goCheckout() {
+  if (!cartItems.length) return;
+  const subtotal = cartItems.reduce((s,i) => s + i.price * i.quantity, 0);
+  const data = {
+    coupon:   couponData?.code || '',
+    discount: couponData?.discount || 0,
+    freeship: couponData?.freeship || false,
+    subtotal,
+  };
+  sessionStorage.setItem('nexgen_checkout', JSON.stringify(data));
+  location.href = 'checkout.html';
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Checkout — NexGen Shop</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .checkout-layout { display:grid; grid-template-columns:1fr 340px; gap:24px; align-items:start; }
+    @media(max-width:900px){ .checkout-layout { grid-template-columns:1fr; } }
+    .steps { display:flex; gap:0; margin-bottom:30px; }
+    .step { flex:1; text-align:center; padding:12px; font-size:12px; border-bottom:3px solid var(--dark4); color:var(--dim); }
+    .step.active { border-bottom-color:var(--red); color:var(--gold); font-weight:bold; }
+    .step.done   { border-bottom-color:var(--green); color:var(--green); }
+    .addr-card { border:2px solid var(--dark4); border-radius:10px; padding:16px; cursor:pointer; margin-bottom:12px; transition:border-color .2s; }
+    .addr-card:hover { border-color:var(--red); }
+    .addr-card.selected { border-color:var(--gold); }
+    .addr-card h4 { font-size:14px; margin-bottom:4px; }
+    .addr-card p  { font-size:13px; color:var(--dim); line-height:1.6; }
+    .payment-option { display:flex; align-items:center; gap:14px; border:2px solid var(--dark4); border-radius:10px; padding:16px; cursor:pointer; margin-bottom:12px; transition:border-color .2s; }
+    .payment-option:hover { border-color:var(--red); }
+    .payment-option.selected { border-color:var(--gold); }
+    .payment-option input { accent-color:var(--gold); }
+    .payment-icon { font-size:28px; }
+    .payment-info h4 { font-size:14px; margin-bottom:2px; }
+    .payment-info p  { font-size:12px; color:var(--dim); }
+    .order-item { display:flex; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--dark4); }
+    .order-item img { width:50px; height:50px; object-fit:contain; background:var(--dark); border-radius:6px; }
+    .summary-row { display:flex; justify-content:space-between; font-size:14px; margin-bottom:8px; }
+    .summary-row.total { font-size:17px; font-weight:bold; border-top:1px solid var(--dark4); padding-top:10px; }
+    .add-addr-form { display:none; }
+    .add-addr-form.open { display:block; }
+    .mock-payment-notice { background:rgba(255,204,0,.1); border:1px solid var(--gold); border-radius:8px; padding:12px 16px; font-size:13px; color:var(--gold); margin-top:12px; }
+  </style>
+</head>
+<body>
+<div id="navbar-root"></div>
+<div class="page-wrap">
+  <div class="breadcrumb"><a href="index.html">Home</a> › <a href="cart.html">Cart</a> › <span>Checkout</span></div>
+
+  <div class="steps">
+    <div class="step active" id="step1">① Shipping</div>
+    <div class="step" id="step2">② Payment</div>
+    <div class="step" id="step3">③ Review</div>
+  </div>
+
+  <div class="checkout-layout">
+    <div id="mainSection">
+      <div class="loading-center"><div class="spinner"></div></div>
+    </div>
+
+    <!-- ORDER SUMMARY -->
+    <div class="panel" style="position:sticky;top:80px">
+      <div class="panel-title">ORDER SUMMARY</div>
+      <div id="orderItems" style="margin-bottom:16px"></div>
+      <div id="orderTotals"></div>
+      <button class="btn-primary w-full" id="proceedBtn" style="margin-top:16px;font-size:15px;padding:14px" onclick="proceed()">Continue →</button>
+      <div style="text-align:center;font-size:12px;color:var(--dim);margin-top:8px">🛡️ Secure checkout</div>
+    </div>
+  </div>
+</div>
+<div id="footer-root"></div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/components.js"></script>
+<script>
+if (!Auth.isLoggedIn()) location.href = 'profile.html?redirect=checkout.html';
+
+let currentStep = 1;
+let cartItems   = [];
+let addresses   = [];
+let selectedAddr = null;
+let selectedPayment = 'cod';
+let checkoutMeta = JSON.parse(sessionStorage.getItem('nexgen_checkout') || '{}');
+
+const SHIPPING_FEE = 99;
+
+async function init() {
+  await Components.init();
+  try {
+    [cartItems, addresses] = await Promise.all([Api.cart.get(), Api.auth.addresses.list()]);
+  } catch { location.href = 'cart.html'; return; }
+  if (!cartItems.length) { location.href = 'cart.html'; return; }
+  renderSummary();
+  renderStep1();
+}
+
+function renderSummary() {
+  const sub      = cartItems.reduce((s,i) => s + i.price * i.quantity, 0);
+  const shipping = (checkoutMeta.freeship || sub >= 500) ? 0 : SHIPPING_FEE;
+  const discount = checkoutMeta.discount || 0;
+  const total    = Math.max(0, sub + shipping - discount);
+  checkoutMeta._totals = { sub, shipping, discount, total };
+
+  document.getElementById('orderItems').innerHTML = cartItems.map(i => `
+<div class="order-item">
+  ${i.image ? `<img src="assets/${i.image}" alt="" onerror="this.style.display='none'">` : `<div style="width:50px;height:50px;font-size:28px;display:flex;align-items:center;justify-content:center">${Components._catEmoji(i.category)}</div>`}
+  <div style="flex:1;min-width:0">
+    <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${Components._esc(i.name)}</div>
+    ${i.variation !== 'default' ? `<div style="font-size:11px;color:var(--dim)">${Components._esc(i.variation)}</div>` : ''}
+    <div style="font-size:12px;color:var(--dim)">x${i.quantity}</div>
+  </div>
+  <div style="font-size:13px;font-weight:bold;color:var(--red)">₱${Number(i.price*i.quantity).toLocaleString()}</div>
+</div>`).join('');
+
+  document.getElementById('orderTotals').innerHTML = `
+<div class="summary-row"><span>Subtotal</span><span>₱${Number(sub).toLocaleString()}</span></div>
+<div class="summary-row"><span>Shipping</span><span>${shipping===0?'<span style="color:var(--green)">FREE</span>':'₱'+shipping}</span></div>
+${discount ? `<div class="summary-row" style="color:var(--green)"><span>Discount</span><span>-₱${Number(discount).toLocaleString()}</span></div>` : ''}
+<div class="summary-row total"><span>Total</span><span>₱${Number(total).toLocaleString()}</span></div>`;
+}
+
+function setStep(n) {
+  currentStep = n;
+  [1,2,3].forEach(i => {
+    document.getElementById(`step${i}`).className = 'step' + (i < n ? ' done' : i === n ? ' active' : '');
+  });
+  document.getElementById('proceedBtn').textContent = n < 3 ? 'Continue →' : 'Place Order';
+}
+
+function renderStep1() {
+  setStep(1);
+  document.getElementById('mainSection').innerHTML = `
+<div class="panel">
+  <div class="panel-title">📍 SHIPPING ADDRESS</div>
+  ${addresses.map(a => `
+  <div class="addr-card ${selectedAddr?.id === a.id ? 'selected' : ''}" onclick="selectAddr(${a.id})">
+    <h4>${Components._esc(a.label)} ${a.is_default ? '<span style="font-size:11px;color:var(--gold)">Default</span>' : ''}</h4>
+    <p><strong>${Components._esc(a.full_name)}</strong> • ${Components._esc(a.phone)}</p>
+    <p>${Components._esc(a.line1)}${a.line2?', '+Components._esc(a.line2):''}, ${Components._esc(a.city)}, ${Components._esc(a.province)} ${Components._esc(a.zip)}</p>
+  </div>`).join('')}
+  <button class="btn-outline w-full" onclick="toggleAddAddr()">+ Add New Address</button>
+
+  <div class="add-addr-form" id="addAddrForm" style="margin-top:16px">
+    <div class="form-row">
+      <div class="form-group"><label>Full Name</label><input id="a_name" class="form-control" placeholder="Juan Dela Cruz"></div>
+      <div class="form-group"><label>Phone</label><input id="a_phone" class="form-control" placeholder="09XXXXXXXXX"></div>
+    </div>
+    <div class="form-group"><label>Address Line 1</label><input id="a_line1" class="form-control" placeholder="Street, Barangay"></div>
+    <div class="form-row">
+      <div class="form-group"><label>City</label><input id="a_city" class="form-control" placeholder="City/Municipality"></div>
+      <div class="form-group"><label>Province</label><input id="a_province" class="form-control" placeholder="Province"></div>
+      <div class="form-group"><label>ZIP</label><input id="a_zip" class="form-control" placeholder="0000" style="max-width:80px"></div>
+    </div>
+    <button class="btn-primary" onclick="saveNewAddr()">Save Address</button>
+  </div>
+</div>`;
+
+  if (!selectedAddr && addresses.length) {
+    const def = addresses.find(a => a.is_default) || addresses[0];
+    selectAddr(def.id, false);
+  }
+}
+
+function selectAddr(id, reRender=true) {
+  selectedAddr = addresses.find(a => a.id === id);
+  if (reRender) {
+    document.querySelectorAll('.addr-card').forEach(c => {
+      c.classList.toggle('selected', c.onclick.toString().includes(`(${id})`));
+    });
+  }
+}
+
+function toggleAddAddr() {
+  document.getElementById('addAddrForm').classList.toggle('open');
+}
+
+async function saveNewAddr() {
+  const body = {
+    full_name: document.getElementById('a_name').value.trim(),
+    phone:     document.getElementById('a_phone').value.trim(),
+    line1:     document.getElementById('a_line1').value.trim(),
+    city:      document.getElementById('a_city').value.trim(),
+    province:  document.getElementById('a_province').value.trim(),
+    zip:       document.getElementById('a_zip').value.trim(),
+  };
+  if (!body.full_name || !body.phone || !body.line1 || !body.city || !body.province || !body.zip) {
+    showToast('Please fill all address fields.', 'error'); return;
+  }
+  try {
+    const addr = await Api.auth.addresses.add(body);
+    addresses.push(addr);
+    selectedAddr = addr;
+    renderStep1();
+    showToast('Address saved!');
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+function renderStep2() {
+  setStep(2);
+  document.getElementById('mainSection').innerHTML = `
+<div class="panel">
+  <div class="panel-title">💳 PAYMENT METHOD</div>
+
+  <div class="payment-option ${selectedPayment==='cod'?'selected':''}" onclick="selectPayment('cod',this)">
+    <input type="radio" name="pay" ${selectedPayment==='cod'?'checked':''}>
+    <div class="payment-icon">💵</div>
+    <div class="payment-info"><h4>Cash on Delivery (COD)</h4><p>Pay when your order arrives.</p></div>
+  </div>
+
+  <div class="payment-option ${selectedPayment==='gcash'?'selected':''}" onclick="selectPayment('gcash',this)">
+    <input type="radio" name="pay" ${selectedPayment==='gcash'?'checked':''}>
+    <div class="payment-icon">📱</div>
+    <div class="payment-info"><h4>GCash</h4><p>Pay via GCash mobile wallet.</p></div>
+  </div>
+
+  <div class="payment-option ${selectedPayment==='maya'?'selected':''}" onclick="selectPayment('maya',this)">
+    <input type="radio" name="pay" ${selectedPayment==='maya'?'checked':''}>
+    <div class="payment-icon">💜</div>
+    <div class="payment-info"><h4>Maya</h4><p>Pay via Maya digital wallet.</p></div>
+  </div>
+
+  <div class="payment-option ${selectedPayment==='card'?'selected':''}" onclick="selectPayment('card',this)">
+    <input type="radio" name="pay" ${selectedPayment==='card'?'checked':''}>
+    <div class="payment-icon">💳</div>
+    <div class="payment-info"><h4>Credit / Debit Card</h4><p>Visa, Mastercard, JCB.</p></div>
+  </div>
+
+  ${selectedPayment !== 'cod' ? `
+  <div class="mock-payment-notice">
+    ℹ️ Payment gateway coming soon — your order will be placed and you'll be contacted for payment confirmation.
+  </div>` : ''}
+
+  <div class="form-group" style="margin-top:16px">
+    <label>Order Notes (optional)</label>
+    <textarea id="orderNotes" class="form-control" rows="2" placeholder="Special instructions, landmark, etc."></textarea>
+  </div>
+</div>`;
+}
+
+function selectPayment(method, el) {
+  selectedPayment = method;
+  document.querySelectorAll('.payment-option').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function renderStep3() {
+  setStep(3);
+  const totals = checkoutMeta._totals;
+  document.getElementById('mainSection').innerHTML = `
+<div class="panel">
+  <div class="panel-title">✅ REVIEW ORDER</div>
+
+  <h4 style="font-size:13px;color:var(--dim);margin-bottom:8px">Shipping To</h4>
+  <div style="margin-bottom:20px;font-size:14px;line-height:1.8">
+    <strong>${Components._esc(selectedAddr.full_name)}</strong> • ${Components._esc(selectedAddr.phone)}<br>
+    ${Components._esc(selectedAddr.line1)}${selectedAddr.line2?', '+Components._esc(selectedAddr.line2):''}<br>
+    ${Components._esc(selectedAddr.city)}, ${Components._esc(selectedAddr.province)} ${Components._esc(selectedAddr.zip)}
+  </div>
+
+  <h4 style="font-size:13px;color:var(--dim);margin-bottom:8px">Payment</h4>
+  <div style="margin-bottom:20px;font-size:14px">${{cod:'Cash on Delivery',gcash:'GCash',maya:'Maya',card:'Credit/Debit Card'}[selectedPayment]}</div>
+
+  ${checkoutMeta.coupon ? `
+  <h4 style="font-size:13px;color:var(--dim);margin-bottom:8px">Coupon</h4>
+  <div style="margin-bottom:20px;font-size:14px;color:var(--green)">${Components._esc(checkoutMeta.coupon)} — -₱${Number(totals.discount).toLocaleString()} off</div>` : ''}
+
+  <div style="background:var(--dark4);border-radius:8px;padding:14px">
+    <div class="summary-row"><span>Subtotal</span><span>₱${Number(totals.sub).toLocaleString()}</span></div>
+    <div class="summary-row"><span>Shipping</span><span>${totals.shipping===0?'FREE':'₱'+totals.shipping}</span></div>
+    ${totals.discount ? `<div class="summary-row" style="color:var(--green)"><span>Discount</span><span>-₱${Number(totals.discount).toLocaleString()}</span></div>` : ''}
+    <div class="summary-row total"><span>Total</span><span>₱${Number(totals.total).toLocaleString()}</span></div>
+  </div>
+</div>`;
+}
+
+async function proceed() {
+  if (currentStep === 1) {
+    if (!selectedAddr) { showToast('Please select a shipping address.', 'error'); return; }
+    renderStep2();
+  } else if (currentStep === 2) {
+    renderStep3();
+  } else if (currentStep === 3) {
+    await placeOrder();
+  }
+}
+
+async function placeOrder() {
+  document.getElementById('proceedBtn').disabled = true;
+  document.getElementById('proceedBtn').textContent = 'Placing order...';
+  try {
+    const notes = document.getElementById('orderNotes')?.value.trim() || '';
+    const order = await Api.orders.create({
+      address_id:     selectedAddr.id,
+      payment_method: selectedPayment,
+      coupon_code:    checkoutMeta.coupon || undefined,
+      notes,
+    });
+    sessionStorage.setItem('nexgen_last_order', JSON.stringify(order));
+    sessionStorage.removeItem('nexgen_checkout');
+    await Components.updateCartBadge();
+    location.href = `order-confirm.html?id=${order.id}`;
+  } catch (err) {
+    showToast(err.message || 'Could not place order. Please try again.', 'error');
+    document.getElementById('proceedBtn').disabled = false;
+    document.getElementById('proceedBtn').textContent = 'Place Order';
+  }
+}
+
+init();
+</script>
+</body>
+</html>

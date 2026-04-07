@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Admin Dashboard — NexGen</title>
+  <link rel="stylesheet" href="../style.css"/>
+  <style>
+    .admin-layout { display:grid; grid-template-columns:220px 1fr; gap:0; min-height:100vh; }
+    .admin-sidebar { background:var(--dark); border-right:2px solid var(--dark4); padding:24px 0; position:sticky; top:0; height:100vh; overflow-y:auto; }
+    .admin-logo { font-family:'Press Start 2P',sans-serif; font-size:10px; color:var(--gold); padding:0 20px 20px; border-bottom:1px solid var(--dark4); margin-bottom:16px; line-height:2; }
+    .admin-logo span { color:var(--red); }
+    .admin-nav a { display:flex; align-items:center; gap:10px; padding:12px 20px; font-size:13px; color:var(--dim); cursor:pointer; border-left:3px solid transparent; text-decoration:none; }
+    .admin-nav a:hover,.admin-nav a.active { background:var(--dark2); color:var(--gold); border-left-color:var(--red); }
+    .admin-main { padding:32px; }
+    @media(max-width:900px){ .admin-layout { grid-template-columns:1fr; } .admin-sidebar { height:auto; position:static; } }
+    .stat-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:32px; }
+    @media(max-width:900px){ .stat-cards { grid-template-columns:repeat(2,1fr); } }
+    .stat-card { text-align:center; padding:20px; }
+    .stat-card .num { font-family:'Press Start 2P',sans-serif; font-size:18px; color:var(--gold); margin-bottom:6px; }
+    .stat-card .lbl { font-size:12px; color:var(--dim); }
+    .stat-card .trend { font-size:11px; color:var(--green); margin-top:4px; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th { text-align:left; padding:10px 12px; color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid var(--dark4); }
+    td { padding:10px 12px; border-bottom:1px solid var(--dark4); vertical-align:middle; }
+    tr:hover td { background:rgba(255,255,255,.02); }
+    .admin-actions { display:flex; gap:8px; }
+  </style>
+</head>
+<body>
+<div class="admin-layout">
+  <!-- SIDEBAR -->
+  <aside class="admin-sidebar">
+    <div class="admin-logo">⚙️ NEXGEN<br><span>ADMIN</span></div>
+    <nav class="admin-nav">
+      <a href="index.html"    class="active">📊 Dashboard</a>
+      <a href="products.html">📦 Products</a>
+      <a href="orders.html">🚚 Orders</a>
+      <a href="users.html">👥 Users</a>
+      <hr style="border-color:var(--dark4);margin:12px 0">
+      <a href="../index.html">🏠 View Store</a>
+      <a onclick="doLogout()" style="color:var(--red)">🚪 Logout</a>
+    </nav>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="admin-main">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <h1 style="font-family:'Press Start 2P',sans-serif;font-size:14px;color:var(--gold)">DASHBOARD</h1>
+      <span id="adminName" style="font-size:13px;color:var(--dim)"></span>
+    </div>
+
+    <div class="stat-cards" id="statCards">
+      <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div class="panel">
+        <div class="panel-title">🕒 RECENT ORDERS</div>
+        <div id="recentOrders"><div class="loading-center"><div class="spinner"></div></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">🔥 TOP PRODUCTS</div>
+        <div id="topProducts"><div class="loading-center"><div class="spinner"></div></div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+if (!Auth.isLoggedIn() || !Auth.isAdmin()) location.href = '../profile.html';
+document.getElementById('adminName').textContent = Auth.getUser()?.name || '';
+
+async function init() {
+  try {
+    const { stats, recentOrders, topProducts } = await Api.admin.dashboard();
+
+    document.getElementById('statCards').innerHTML = `
+<div class="stat-card panel">
+  <div class="num">${stats.customers.toLocaleString()}</div>
+  <div class="lbl">Customers</div>
+</div>
+<div class="stat-card panel">
+  <div class="num">${stats.products.toLocaleString()}</div>
+  <div class="lbl">Active Products</div>
+</div>
+<div class="stat-card panel">
+  <div class="num">${stats.orders.toLocaleString()}</div>
+  <div class="lbl">Total Orders</div>
+  <div class="trend">▲ ${stats.orderStats.pending||0} pending</div>
+</div>
+<div class="stat-card panel">
+  <div class="num">₱${Number(stats.revenue).toLocaleString()}</div>
+  <div class="lbl">Total Revenue</div>
+</div>`;
+
+    document.getElementById('recentOrders').innerHTML = `
+<table>
+  <tr><th>ID</th><th>Customer</th><th>Status</th><th>Total</th></tr>
+  ${recentOrders.map(o => `
+  <tr>
+    <td><a href="orders.html?id=${o.id}" style="color:var(--gold)">#${o.id}</a></td>
+    <td>${esc(o.customer_name)}</td>
+    <td><span class="status-badge status-${o.status}">${o.status.toUpperCase()}</span></td>
+    <td style="color:var(--red);font-weight:bold">₱${Number(o.total).toLocaleString()}</td>
+  </tr>`).join('')}
+</table>`;
+
+    document.getElementById('topProducts').innerHTML = `
+<table>
+  <tr><th>Product</th><th>Sold</th><th>Price</th></tr>
+  ${topProducts.map(p => `
+  <tr>
+    <td><a href="../product.html?id=${p.id}" style="color:var(--text)">${esc(p.name)}</a></td>
+    <td style="color:var(--dim)">${p.sold_count.toLocaleString()}</td>
+    <td style="color:var(--red)">₱${Number(p.price).toLocaleString()}</td>
+  </tr>`).join('')}
+</table>`;
+  } catch (err) {
+    document.getElementById('statCards').innerHTML = `<p style="color:var(--dim);grid-column:1/-1;text-align:center;padding:40px">Could not load dashboard. Is the API running?</p>`;
+  }
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function doLogout() { Auth.logout(); }
+init();
+</script>
+</body>
+</html>

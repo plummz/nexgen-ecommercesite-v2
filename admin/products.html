@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Products — Admin | NexGen</title>
+  <link rel="stylesheet" href="../style.css"/>
+  <style>
+    .admin-layout{display:grid;grid-template-columns:220px 1fr;gap:0;min-height:100vh}
+    .admin-sidebar{background:var(--dark);border-right:2px solid var(--dark4);padding:24px 0;position:sticky;top:0;height:100vh;overflow-y:auto}
+    .admin-logo{font-family:'Press Start 2P',sans-serif;font-size:10px;color:var(--gold);padding:0 20px 20px;border-bottom:1px solid var(--dark4);margin-bottom:16px;line-height:2}
+    .admin-logo span{color:var(--red)}
+    .admin-nav a{display:flex;align-items:center;gap:10px;padding:12px 20px;font-size:13px;color:var(--dim);cursor:pointer;border-left:3px solid transparent;text-decoration:none}
+    .admin-nav a:hover,.admin-nav a.active{background:var(--dark2);color:var(--gold);border-left-color:var(--red)}
+    .admin-main{padding:32px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{text-align:left;padding:10px 12px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--dark4)}
+    td{padding:10px 12px;border-bottom:1px solid var(--dark4);vertical-align:middle}
+    tr:hover td{background:rgba(255,255,255,.02)}
+    .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
+    .modal.open{display:flex}
+    .modal-box{background:var(--dark2);border:1px solid var(--dark4);border-radius:10px;padding:28px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto}
+    .prod-img{width:42px;height:42px;object-fit:contain;background:var(--dark);border-radius:4px}
+  </style>
+</head>
+<body>
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="admin-logo">⚙️ NEXGEN<br><span>ADMIN</span></div>
+    <nav class="admin-nav">
+      <a href="index.html">📊 Dashboard</a>
+      <a href="products.html" class="active">📦 Products</a>
+      <a href="orders.html">🚚 Orders</a>
+      <a href="users.html">👥 Users</a>
+      <hr style="border-color:var(--dark4);margin:12px 0">
+      <a href="../index.html">🏠 View Store</a>
+      <a onclick="Auth.logout()" style="color:var(--red)">🚪 Logout</a>
+    </nav>
+  </aside>
+
+  <main class="admin-main">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+      <h1 style="font-family:'Press Start 2P',sans-serif;font-size:14px;color:var(--gold)">PRODUCTS</h1>
+      <button class="btn-primary btn-sm" onclick="openCreate()">+ Add Product</button>
+    </div>
+
+    <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+      <input id="searchQ" class="form-control" placeholder="Search products..." style="max-width:280px" oninput="debounceSearch()">
+      <select id="catFilter" class="form-control" style="width:auto" onchange="loadProducts()">
+        <option value="">All Categories</option>
+      </select>
+      <span id="totalCount" style="font-size:13px;color:var(--dim);padding:8px 0"></span>
+    </div>
+
+    <div class="panel">
+      <div id="productsTable"><div class="loading-center"><div class="spinner"></div></div></div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:16px">
+        <button class="btn-outline btn-sm" id="prevBtn" onclick="changePage(-1)">← Prev</button>
+        <span id="pageInfo" style="font-size:13px;color:var(--dim);padding:6px 12px"></span>
+        <button class="btn-outline btn-sm" id="nextBtn" onclick="changePage(1)">Next →</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- PRODUCT FORM MODAL -->
+<div class="modal" id="productModal">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h3 id="modalTitle" style="font-family:'Press Start 2P',sans-serif;font-size:11px;color:var(--gold)">ADD PRODUCT</h3>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div id="productForm"></div>
+  </div>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+if (!Auth.isLoggedIn() || !Auth.isAdmin()) location.href = '../profile.html';
+let page=1, totalPages=1, cats=[], editId=null, _search;
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function showToast(msg,t='success'){let el=document.getElementById('toast');if(!el){el=document.createElement('div');el.id='toast';document.body.appendChild(el);}el.textContent=msg;el.className=`toast toast-${t} show`;clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),3000);}
+
+async function init() {
+  cats = await Api.products.categories();
+  const catSel = document.getElementById('catFilter');
+  cats.forEach(c => catSel.innerHTML += `<option value="${c.slug}">${c.name}</option>`);
+  loadProducts();
+}
+
+function debounceSearch() { clearTimeout(_search); _search = setTimeout(() => { page=1; loadProducts(); }, 400); }
+
+async function loadProducts() {
+  const q   = document.getElementById('searchQ').value.trim();
+  const cat = document.getElementById('catFilter').value;
+  document.getElementById('productsTable').innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  try {
+    const { products, total } = await Api.admin.products.list({ page, limit:20, q, cat });
+    totalPages = Math.ceil(total/20);
+    document.getElementById('totalCount').textContent = `${total} products`;
+    document.getElementById('pageInfo').textContent   = `Page ${page}/${totalPages||1}`;
+    document.getElementById('prevBtn').disabled = page<=1;
+    document.getElementById('nextBtn').disabled = page>=totalPages;
+
+    document.getElementById('productsTable').innerHTML = `<table>
+<tr><th></th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Badge</th><th>Status</th><th>Actions</th></tr>
+${products.map(p => `
+<tr>
+  <td>${p.image ? `<img class="prod-img" src="../assets/${esc(p.image)}" alt="" onerror="this.style.display='none'">` : '<span style="font-size:24px">🛍️</span>'}</td>
+  <td><strong>${esc(p.name)}</strong></td>
+  <td style="color:var(--dim)">${esc(p.category_name||p.category||'')}</td>
+  <td style="color:var(--red)">₱${Number(p.price).toLocaleString()}</td>
+  <td class="${p.stock<10?'text-gold':p.stock===0?'text-red':''}">${p.stock}</td>
+  <td>${p.badge?`<span class="status-badge status-confirmed">${esc(p.badge)}</span>`:'-'}</td>
+  <td><span class="${p.is_active?'text-green':'text-red'}">${p.is_active?'Active':'Inactive'}</span></td>
+  <td style="white-space:nowrap">
+    <button class="btn-outline btn-sm" onclick="openEdit(${p.id})" style="margin-right:4px">Edit</button>
+    <button class="btn-danger  btn-sm" onclick="deactivate(${p.id})">Remove</button>
+  </td>
+</tr>`).join('')}
+</table>`;
+  } catch {
+    document.getElementById('productsTable').innerHTML = '<p style="color:var(--dim);text-align:center;padding:40px">Could not load products.</p>';
+  }
+}
+
+function changePage(d){const n=page+d;if(n<1||n>totalPages)return;page=n;loadProducts();}
+
+function renderForm(p={}) {
+  editId = p.id || null;
+  document.getElementById('modalTitle').textContent = p.id ? 'EDIT PRODUCT' : 'ADD PRODUCT';
+  document.getElementById('productForm').innerHTML = `
+<div class="form-row">
+  <div class="form-group"><label>Name *</label><input id="f_name" class="form-control" value="${esc(p.name||'')}"></div>
+  <div class="form-group"><label>Category</label>
+    <select id="f_cat" class="form-control">
+      <option value="">— Select —</option>
+      ${cats.map(c => `<option value="${c.id}" ${p.category_id==c.id?'selected':''}>${c.name}</option>`).join('')}
+    </select>
+  </div>
+</div>
+<div class="form-row">
+  <div class="form-group"><label>Price *</label><input id="f_price" class="form-control" type="number" value="${p.price||''}"></div>
+  <div class="form-group"><label>Original Price</label><input id="f_orig" class="form-control" type="number" value="${p.original_price||''}"></div>
+</div>
+<div class="form-row">
+  <div class="form-group"><label>Stock</label><input id="f_stock" class="form-control" type="number" value="${p.stock??100}"></div>
+  <div class="form-group"><label>Badge</label><input id="f_badge" class="form-control" value="${esc(p.badge||'')}" placeholder="HOT / NEW / SALE..."></div>
+</div>
+<div class="form-group"><label>Image filename</label><input id="f_image" class="form-control" value="${esc(p.image||'')}" placeholder="product.png"></div>
+<div class="form-group"><label>Description</label><textarea id="f_desc" class="form-control" rows="3">${esc(p.description||'')}</textarea></div>
+<div id="formErr" class="form-error" style="margin-bottom:8px"></div>
+<div style="display:flex;gap:10px">
+  <button class="btn-primary" onclick="saveProduct()">Save</button>
+  <button class="btn-outline" onclick="closeModal()">Cancel</button>
+</div>`;
+  document.getElementById('productModal').classList.add('open');
+}
+
+function openCreate() { renderForm(); }
+async function openEdit(id) {
+  try {
+    const p = await Api.admin.products.list({ q:'', page:1, limit:1000 });
+    const prod = p.products.find(x=>x.id===id);
+    if (prod) renderForm(prod);
+  } catch { renderForm({ id }); }
+}
+
+async function saveProduct() {
+  const data = {
+    name:           document.getElementById('f_name').value.trim(),
+    category_id:    document.getElementById('f_cat').value || null,
+    price:          parseFloat(document.getElementById('f_price').value) || 0,
+    original_price: parseFloat(document.getElementById('f_orig').value) || null,
+    stock:          parseInt(document.getElementById('f_stock').value) || 100,
+    badge:          document.getElementById('f_badge').value.trim() || null,
+    image:          document.getElementById('f_image').value.trim() || null,
+    description:    document.getElementById('f_desc').value.trim(),
+  };
+  if (!data.name || !data.price) { document.getElementById('formErr').textContent = 'Name and price are required.'; return; }
+  try {
+    if (editId) await Api.admin.products.update(editId, data);
+    else        await Api.admin.products.create(data);
+    closeModal(); loadProducts(); showToast(editId ? 'Product updated.' : 'Product created.');
+  } catch (err) { document.getElementById('formErr').textContent = err.message; }
+}
+
+async function deactivate(id) {
+  if (!confirm('Remove this product?')) return;
+  try { await Api.admin.products.delete(id); loadProducts(); showToast('Product removed.'); } catch (err) { showToast(err.message,'error'); }
+}
+
+function closeModal() { document.getElementById('productModal').classList.remove('open'); }
+document.getElementById('productModal').addEventListener('click', e => { if(e.target===e.currentTarget) closeModal(); });
+
+init();
+</script>
+</body>
+</html>

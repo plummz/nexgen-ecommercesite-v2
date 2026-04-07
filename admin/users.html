@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Users — Admin | NexGen</title>
+  <link rel="stylesheet" href="../style.css"/>
+  <style>
+    .admin-layout{display:grid;grid-template-columns:220px 1fr;gap:0;min-height:100vh}
+    .admin-sidebar{background:var(--dark);border-right:2px solid var(--dark4);padding:24px 0;position:sticky;top:0;height:100vh;overflow-y:auto}
+    .admin-logo{font-family:'Press Start 2P',sans-serif;font-size:10px;color:var(--gold);padding:0 20px 20px;border-bottom:1px solid var(--dark4);margin-bottom:16px;line-height:2}
+    .admin-logo span{color:var(--red)}
+    .admin-nav a{display:flex;align-items:center;gap:10px;padding:12px 20px;font-size:13px;color:var(--dim);cursor:pointer;border-left:3px solid transparent;text-decoration:none}
+    .admin-nav a:hover,.admin-nav a.active{background:var(--dark2);color:var(--gold);border-left-color:var(--red)}
+    .admin-main{padding:32px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{text-align:left;padding:10px 12px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--dark4)}
+    td{padding:10px 12px;border-bottom:1px solid var(--dark4);vertical-align:middle}
+    tr:hover td{background:rgba(255,255,255,.02)}
+  </style>
+</head>
+<body>
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="admin-logo">⚙️ NEXGEN<br><span>ADMIN</span></div>
+    <nav class="admin-nav">
+      <a href="index.html">📊 Dashboard</a>
+      <a href="products.html">📦 Products</a>
+      <a href="orders.html">🚚 Orders</a>
+      <a href="users.html" class="active">👥 Users</a>
+      <hr style="border-color:var(--dark4);margin:12px 0">
+      <a href="../index.html">🏠 View Store</a>
+      <a onclick="Auth.logout()" style="color:var(--red)">🚪 Logout</a>
+    </nav>
+  </aside>
+
+  <main class="admin-main">
+    <h1 style="font-family:'Press Start 2P',sans-serif;font-size:14px;color:var(--gold);margin-bottom:24px">USERS</h1>
+
+    <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+      <input id="searchQ" class="form-control" placeholder="Search by name or email..." style="max-width:320px" oninput="debounceSearch()">
+      <span id="totalCount" style="font-size:13px;color:var(--dim);padding:8px 0"></span>
+    </div>
+
+    <div class="panel">
+      <div id="usersTable"><div class="loading-center"><div class="spinner"></div></div></div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:16px">
+        <button class="btn-outline btn-sm" id="prevBtn" onclick="changePage(-1)">← Prev</button>
+        <span id="pageInfo" style="font-size:13px;color:var(--dim);padding:6px 12px"></span>
+        <button class="btn-outline btn-sm" id="nextBtn" onclick="changePage(1)">Next →</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script>
+if (!Auth.isLoggedIn() || !Auth.isAdmin()) location.href = '../profile.html';
+let page=1, totalPages=1, _t;
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function showToast(msg,t='success'){let el=document.getElementById('toast');if(!el){el=document.createElement('div');el.id='toast';document.body.appendChild(el);}el.textContent=msg;el.className=`toast toast-${t} show`;clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),3000);}
+
+function debounceSearch(){clearTimeout(_t);_t=setTimeout(()=>{page=1;loadUsers();},400);}
+
+async function loadUsers() {
+  const q  = document.getElementById('searchQ').value.trim();
+  const el = document.getElementById('usersTable');
+  el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  try {
+    const { users, total } = await Api.admin.users.list({ page, limit:20, q });
+    totalPages = Math.ceil(total/20);
+    document.getElementById('totalCount').textContent = `${total} users`;
+    document.getElementById('pageInfo').textContent   = `Page ${page}/${totalPages||1}`;
+    document.getElementById('prevBtn').disabled = page<=1;
+    document.getElementById('nextBtn').disabled = page>=totalPages;
+
+    el.innerHTML = `<table>
+<tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr>
+${users.map(u => `
+<tr>
+  <td style="color:var(--dim)">${u.id}</td>
+  <td><div style="width:32px;height:32px;background:var(--red);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:bold;margin-right:8px;vertical-align:middle">${esc((u.name||'?')[0])}</div>${esc(u.name)}</td>
+  <td style="color:var(--dim)">${esc(u.email)}</td>
+  <td style="color:var(--dim)">${esc(u.phone||'—')}</td>
+  <td><span class="status-badge ${u.role==='admin'?'status-shipped':'status-confirmed'}">${u.role.toUpperCase()}</span></td>
+  <td><span class="${u.is_active?'text-green':'text-red'}">${u.is_active?'Active':'Suspended'}</span></td>
+  <td style="color:var(--dim);white-space:nowrap">${new Date(u.created_at).toLocaleDateString()}</td>
+  <td style="white-space:nowrap">
+    <button class="btn-outline btn-sm" style="margin-right:4px"
+            onclick="toggleRole(${u.id},'${u.role==='admin'?'customer':'admin'}')">
+      ${u.role==='admin'?'→ Customer':'→ Admin'}
+    </button>
+    <button class="btn-${u.is_active?'danger':'success'} btn-sm" onclick="toggleActive(${u.id})">
+      ${u.is_active?'Suspend':'Activate'}
+    </button>
+  </td>
+</tr>`).join('')}
+</table>`;
+  } catch {
+    el.innerHTML = '<p style="color:var(--dim);text-align:center;padding:40px">Could not load users.</p>';
+  }
+}
+
+function changePage(d){const n=page+d;if(n<1||n>totalPages)return;page=n;loadUsers();}
+
+async function toggleRole(id, role) {
+  if (!confirm(`Change this user's role to ${role}?`)) return;
+  try { await Api.admin.users.role(id, { role }); loadUsers(); showToast('Role updated.'); } catch (err) { showToast(err.message,'error'); }
+}
+async function toggleActive(id) {
+  try { const r = await Api.admin.users.toggle(id); loadUsers(); showToast(r.is_active ? 'User activated.' : 'User suspended.'); } catch (err) { showToast(err.message,'error'); }
+}
+
+loadUsers();
+</script>
+</body>
+</html>

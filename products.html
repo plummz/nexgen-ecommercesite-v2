@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Products — NexGen Shop</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .products-layout { display:grid; grid-template-columns:240px 1fr; gap:24px; }
+    @media(max-width:900px){ .products-layout { grid-template-columns:1fr; } .filters-panel { display:none; } }
+    .filters-panel { position:sticky; top:80px; align-self:start; }
+    .filter-section { margin-bottom:20px; }
+    .filter-section h4 { font-size:12px; color:var(--gold); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; }
+    .filter-option { display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; font-size:13px; color:var(--dim); }
+    .filter-option input { accent-color:var(--red); cursor:pointer; }
+    .filter-option:hover { color:var(--text); }
+    .price-range { display:flex; gap:8px; align-items:center; }
+    .price-range input { width:90px; }
+    .sort-bar { display:flex; align-items:center; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
+    .sort-bar select { background:var(--dark4); border:1px solid var(--dark4); color:var(--text); padding:8px 12px; border-radius:var(--radius); font-size:13px; }
+    .results-count { font-size:13px; color:var(--dim); }
+    .active-filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+    .filter-tag { background:var(--dark4); border:1px solid var(--red); color:var(--text); padding:4px 10px; border-radius:20px; font-size:12px; display:flex; align-items:center; gap:6px; }
+    .filter-tag button { background:none; border:none; color:var(--dim); cursor:pointer; padding:0; font-size:14px; line-height:1; }
+  </style>
+</head>
+<body>
+<div id="navbar-root"></div>
+<div class="page-wrap">
+  <div id="activeTags" class="active-filters"></div>
+
+  <div class="products-layout">
+    <!-- FILTERS -->
+    <aside class="filters-panel panel">
+      <div class="panel-title">🔍 FILTERS</div>
+
+      <div class="filter-section">
+        <h4>Sort By</h4>
+        <select id="sortSelect" onchange="applyFilters()" class="form-control">
+          <option value="popular">Most Popular</option>
+          <option value="newest">Newest</option>
+          <option value="price_asc">Price: Low to High</option>
+          <option value="price_desc">Price: High to Low</option>
+          <option value="rating">Highest Rated</option>
+        </select>
+      </div>
+
+      <div class="filter-section">
+        <h4>Price Range</h4>
+        <div class="price-range">
+          <input type="number" id="minPrice" class="form-control" placeholder="Min" min="0" onchange="applyFilters()"/>
+          <span style="color:var(--dim)">–</span>
+          <input type="number" id="maxPrice" class="form-control" placeholder="Max" min="0" onchange="applyFilters()"/>
+        </div>
+      </div>
+
+      <div class="filter-section">
+        <h4>Badge</h4>
+        <label class="filter-option"><input type="radio" name="badge" value="" onchange="applyFilters()" checked> All</label>
+        <label class="filter-option"><input type="radio" name="badge" value="HOT" onchange="applyFilters()"> 🔥 HOT</label>
+        <label class="filter-option"><input type="radio" name="badge" value="BESTSELLER" onchange="applyFilters()"> ⭐ BESTSELLER</label>
+        <label class="filter-option"><input type="radio" name="badge" value="NEW" onchange="applyFilters()"> 🆕 NEW</label>
+        <label class="filter-option"><input type="radio" name="badge" value="SALE" onchange="applyFilters()"> 🏷️ SALE</label>
+        <label class="filter-option"><input type="radio" name="badge" value="RARE" onchange="applyFilters()"> 💎 RARE</label>
+      </div>
+
+      <button class="btn-outline w-full" onclick="clearFilters()">✕ Clear Filters</button>
+    </aside>
+
+    <!-- MAIN -->
+    <div>
+      <div class="sort-bar">
+        <div class="results-count" id="resultsCount">Loading...</div>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn-outline btn-sm" id="prevBtn" onclick="changePage(-1)">← Prev</button>
+          <span id="pageInfo" style="font-size:13px;color:var(--dim);padding:6px 10px"></span>
+          <button class="btn-outline btn-sm" id="nextBtn" onclick="changePage(1)">Next →</button>
+        </div>
+      </div>
+      <div class="products-grid" id="productsGrid">
+        <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="footer-root"></div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/components.js"></script>
+<script>
+let currentPage = 1;
+let totalPages  = 1;
+let wlIds       = [];
+
+const params = new URLSearchParams(window.location.search);
+
+async function init() {
+  await Components.init();
+  try { if (Auth.isLoggedIn()) wlIds = await Api.wishlist.ids(); } catch {}
+
+  // Pre-fill from URL params
+  const q   = params.get('q')   || '';
+  const cat = params.get('cat') || '';
+  if (q)   document.getElementById('searchInput').value = q;
+  if (cat) {
+    document.querySelectorAll('.cat-link').forEach(a => {
+      if (a.href.includes(`cat=${cat}`)) a.classList.add('active');
+    });
+  }
+
+  await loadProducts();
+}
+
+async function loadProducts() {
+  const el   = document.getElementById('productsGrid');
+  el.innerHTML = '<div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>';
+
+  const query = {
+    q:         params.get('q')     || '',
+    cat:       params.get('cat')   || '',
+    min_price: document.getElementById('minPrice').value || '',
+    max_price: document.getElementById('maxPrice').value || '',
+    badge:     document.querySelector('input[name="badge"]:checked')?.value || '',
+    sort:      document.getElementById('sortSelect').value,
+    page:      currentPage,
+    limit:     20,
+  };
+  Object.keys(query).forEach(k => { if (!query[k]) delete query[k]; });
+
+  try {
+    const { products, total, page, pages } = await Api.products.list(query);
+    totalPages = pages;
+
+    document.getElementById('resultsCount').textContent = `${total} product${total!==1?'s':''} found`;
+    document.getElementById('pageInfo').textContent     = `Page ${page} of ${pages || 1}`;
+    document.getElementById('prevBtn').disabled = page <= 1;
+    document.getElementById('nextBtn').disabled = page >= pages;
+
+    el.innerHTML = products.length
+      ? products.map(p => Components.buildProductCard(p, wlIds)).join('')
+      : `<div class="empty-state" style="grid-column:1/-1">
+           <div class="empty-icon">😢</div>
+           <h3>No Products Found</h3>
+           <p>Try adjusting your filters.</p>
+           <button class="btn-primary" onclick="clearFilters()">Clear Filters</button>
+         </div>`;
+  } catch (err) {
+    el.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>Could not load products. Is the API running?</p></div>`;
+  }
+}
+
+function applyFilters() { currentPage = 1; loadProducts(); }
+function clearFilters() {
+  document.getElementById('minPrice').value = '';
+  document.getElementById('maxPrice').value = '';
+  document.querySelector('input[name="badge"][value=""]').checked = true;
+  document.getElementById('sortSelect').value = 'popular';
+  currentPage = 1;
+  params.delete('q'); params.delete('cat');
+  loadProducts();
+}
+function changePage(dir) {
+  const next = currentPage + dir;
+  if (next < 1 || next > totalPages) return;
+  currentPage = next;
+  loadProducts();
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+init();
+</script>
+</body>
+</html>

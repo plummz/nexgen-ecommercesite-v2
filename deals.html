@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Flash Deals — NexGen Shop</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div id="navbar-root"></div>
+<div class="page-wrap">
+  <div class="flash-banner" style="margin-bottom:30px">
+    <div class="flash-left">
+      <h2>⚡ FLASH DEALS</h2>
+      <p>Limited time offers — don't miss out!</p>
+    </div>
+    <div class="flash-timer">
+      <div class="timer-block"><span class="tnum" id="t-h">--</span><div class="tlbl">HRS</div></div>
+      <span class="timer-sep">:</span>
+      <div class="timer-block"><span class="tnum" id="t-m">--</span><div class="tlbl">MIN</div></div>
+      <span class="timer-sep">:</span>
+      <div class="timer-block"><span class="tnum" id="t-s">--</span><div class="tlbl">SEC</div></div>
+    </div>
+  </div>
+
+  <div class="sec-header">
+    <div class="sec-title">🔥 HOT DEALS</div>
+    <span class="sec-link" id="dealsCount"></span>
+  </div>
+  <div class="products-grid" id="dealsGrid">
+    <div class="loading-center" style="grid-column:1/-1"><div class="spinner"></div></div>
+  </div>
+</div>
+<div id="footer-root"></div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/components.js"></script>
+<script>
+async function init() {
+  await Components.init('deals');
+  let wlIds = [];
+  try { if (Auth.isLoggedIn()) wlIds = await Api.wishlist.ids(); } catch {}
+
+  try {
+    const { products, total } = await Api.products.list({ sort:'popular', limit:40 });
+    // Show products with discounts (have original_price > price)
+    const deals = products.filter(p => p.original_price && p.original_price > p.price);
+    document.getElementById('dealsCount').textContent = `${deals.length} deals available`;
+    document.getElementById('dealsGrid').innerHTML = deals.length
+      ? deals.map(p => Components.buildProductCard(p, wlIds)).join('')
+      : '<div class="empty-state" style="grid-column:1/-1"><h3>No Deals Right Now</h3><p>Check back soon!</p></div>';
+  } catch {
+    document.getElementById('dealsGrid').innerHTML = '<p style="color:var(--dim);text-align:center;grid-column:1/-1;padding:40px">Could not load deals.</p>';
+  }
+
+  // Timer
+  function tick() {
+    const now = new Date(), mid = new Date(now); mid.setHours(24,0,0,0);
+    let d = Math.floor((mid-now)/1000);
+    const h=Math.floor(d/3600); d%=3600; const m=Math.floor(d/60); const s=d%60;
+    const pad=n=>String(n).padStart(2,'0');
+    document.getElementById('t-h').textContent=pad(h);
+    document.getElementById('t-m').textContent=pad(m);
+    document.getElementById('t-s').textContent=pad(s);
+  }
+  tick(); setInterval(tick,1000);
+}
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Profile — NexGen Shop</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .profile-layout { display:grid; grid-template-columns:240px 1fr; gap:24px; }
+    @media(max-width:768px){ .profile-layout { grid-template-columns:1fr; } .profile-sidebar { display:flex; overflow-x:auto; gap:8px; padding-bottom:8px; } }
+    .profile-menu a { display:flex; align-items:center; gap:10px; padding:12px 16px; border-radius:var(--radius); font-size:14px; color:var(--dim); margin-bottom:4px; cursor:pointer; }
+    .profile-menu a:hover,.profile-menu a.active { background:var(--dark4); color:var(--gold); }
+    .user-avatar { width:64px; height:64px; background:var(--red); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:bold; margin:0 auto 10px; }
+    .order-row { display:grid; grid-template-columns:auto 1fr auto auto; gap:12px; align-items:center; padding:14px; border-radius:8px; background:var(--dark4); margin-bottom:8px; }
+    @media(max-width:600px){ .order-row { grid-template-columns:1fr 1fr; } }
+    .auth-tabs { display:flex; gap:0; margin-bottom:24px; border-bottom:2px solid var(--dark4); }
+    .auth-tab { padding:10px 24px; background:none; border:none; color:var(--dim); font-size:14px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; }
+    .auth-tab.active { color:var(--gold); border-bottom-color:var(--red); }
+  </style>
+</head>
+<body>
+<div id="navbar-root"></div>
+<div class="page-wrap">
+  <div id="appRoot">
+    <div class="loading-center"><div class="spinner"></div></div>
+  </div>
+</div>
+<div id="footer-root"></div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/components.js"></script>
+<script>
+let activeTab = window.location.hash.slice(1) || 'profile';
+
+async function init() {
+  await Components.init('profile');
+  if (!Auth.isLoggedIn()) { renderAuth(); return; }
+  renderDashboard();
+}
+
+// ── AUTH ──
+function renderAuth() {
+  document.getElementById('appRoot').innerHTML = `
+<div style="max-width:420px;margin:0 auto">
+  <div class="auth-tabs">
+    <button class="auth-tab active" id="tab-login"    onclick="showAuthTab('login')">Login</button>
+    <button class="auth-tab"        id="tab-register" onclick="showAuthTab('register')">Register</button>
+  </div>
+
+  <!-- LOGIN -->
+  <div id="loginForm">
+    <div class="form-group"><label>Email</label><input type="email" id="l_email" class="form-control" placeholder="you@email.com"></div>
+    <div class="form-group"><label>Password</label><input type="password" id="l_pass" class="form-control" placeholder="Password"></div>
+    <div id="loginError" class="form-error" style="margin-bottom:10px"></div>
+    <button class="btn-primary w-full" onclick="doLogin()">Login</button>
+  </div>
+
+  <!-- REGISTER -->
+  <div id="registerForm" style="display:none">
+    <div class="form-group"><label>Full Name</label><input type="text"     id="r_name"  class="form-control" placeholder="Juan Dela Cruz"></div>
+    <div class="form-group"><label>Email</label>    <input type="email"    id="r_email" class="form-control" placeholder="you@email.com"></div>
+    <div class="form-group"><label>Password</label> <input type="password" id="r_pass"  class="form-control" placeholder="Minimum 6 characters"></div>
+    <div id="regError" class="form-error" style="margin-bottom:10px"></div>
+    <button class="btn-primary w-full" onclick="doRegister()">Create Account</button>
+  </div>
+</div>`;
+}
+
+function showAuthTab(tab) {
+  document.getElementById('loginForm').style.display    = tab === 'login'    ? 'block' : 'none';
+  document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('tab-login').classList.toggle('active',    tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+}
+
+async function doLogin() {
+  const email    = document.getElementById('l_email').value.trim();
+  const password = document.getElementById('l_pass').value;
+  document.getElementById('loginError').textContent = '';
+  try {
+    await Auth.login(email, password);
+    const redirect = new URLSearchParams(location.search).get('redirect');
+    location.href  = redirect || 'profile.html';
+  } catch (err) {
+    document.getElementById('loginError').textContent = err.message || 'Login failed.';
+  }
+}
+
+async function doRegister() {
+  const name  = document.getElementById('r_name').value.trim();
+  const email = document.getElementById('r_email').value.trim();
+  const pass  = document.getElementById('r_pass').value;
+  document.getElementById('regError').textContent = '';
+  try {
+    await Auth.register(name, email, pass);
+    const redirect = new URLSearchParams(location.search).get('redirect');
+    location.href  = redirect || 'profile.html';
+  } catch (err) {
+    document.getElementById('regError').textContent = err.message || 'Registration failed.';
+  }
+}
+
+// ── DASHBOARD ──
+function renderDashboard() {
+  const user = Auth.getUser();
+  document.getElementById('appRoot').innerHTML = `
+<div class="profile-layout">
+  <!-- SIDEBAR -->
+  <aside>
+    <div class="panel" style="text-align:center;margin-bottom:16px">
+      <div class="user-avatar">${Components._esc(user.avatar || user.name[0])}</div>
+      <div style="font-weight:bold;margin-bottom:2px">${Components._esc(user.name)}</div>
+      <div style="font-size:12px;color:var(--dim)">${Components._esc(user.email)}</div>
+      ${user.role === 'admin' ? `<div style="margin-top:6px"><span class="status-badge status-confirmed">ADMIN</span></div>` : ''}
+    </div>
+    <div class="panel profile-menu">
+      <a class="${activeTab==='profile'?'active':''}"  onclick="switchTab('profile')">👤 My Profile</a>
+      <a class="${activeTab==='orders'?'active':''}"   onclick="switchTab('orders')">📦 My Orders</a>
+      <a class="${activeTab==='addresses'?'active':''}" onclick="switchTab('addresses')">📍 Addresses</a>
+      <a class="${activeTab==='security'?'active':''}" onclick="switchTab('security')">🔐 Security</a>
+      <a onclick="Auth.logout()" style="color:var(--red)">🚪 Logout</a>
+    </div>
+  </aside>
+
+  <!-- CONTENT -->
+  <div id="tabContent">
+    <div class="loading-center"><div class="spinner"></div></div>
+  </div>
+</div>`;
+
+  loadTab(activeTab);
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.profile-menu a').forEach(a => {
+    a.classList.toggle('active', a.textContent.toLowerCase().includes(tab));
+  });
+  loadTab(tab);
+}
+
+async function loadTab(tab) {
+  const el = document.getElementById('tabContent');
+  el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+
+  if (tab === 'profile')   await renderProfileTab(el);
+  else if (tab === 'orders') await renderOrdersTab(el);
+  else if (tab === 'addresses') await renderAddressesTab(el);
+  else if (tab === 'security')  renderSecurityTab(el);
+}
+
+async function renderProfileTab(el) {
+  const user = Auth.getUser();
+  el.innerHTML = `
+<div class="panel">
+  <div class="panel-title">👤 MY PROFILE</div>
+  <div class="form-group"><label>Full Name</label><input id="p_name"  class="form-control" value="${Components._esc(user.name)}"></div>
+  <div class="form-group"><label>Email</label>   <input class="form-control" value="${Components._esc(user.email)}" disabled style="opacity:.6"></div>
+  <div class="form-group"><label>Phone</label>   <input id="p_phone" class="form-control" value="${Components._esc(user.phone||'')}" placeholder="09XXXXXXXXX"></div>
+  <div id="profileMsg" class="form-error"></div>
+  <button class="btn-primary" onclick="saveProfile()">Save Changes</button>
+</div>`;
+}
+
+async function saveProfile() {
+  try {
+    const updated = await Api.auth.profile({
+      name:  document.getElementById('p_name').value.trim(),
+      phone: document.getElementById('p_phone').value.trim(),
+    });
+    Auth.setSession(Auth.getToken(), updated);
+    document.getElementById('profileMsg').style.color = 'var(--green)';
+    document.getElementById('profileMsg').textContent = 'Profile updated!';
+    Components.init('profile');
+  } catch (err) {
+    document.getElementById('profileMsg').textContent = err.message;
+  }
+}
+
+async function renderOrdersTab(el) {
+  try {
+    const { orders } = await Api.orders.list({ limit:20 });
+    el.innerHTML = `<div class="panel"><div class="panel-title">📦 MY ORDERS</div>
+${!orders.length ? `<div class="empty-state"><div class="empty-icon">📦</div><h3>No Orders Yet</h3><p>Your orders will appear here.</p><a href="products.html" class="btn-primary">Shop Now</a></div>` :
+orders.map(o => `
+<div class="order-row" onclick="location.href='order-confirm.html?id=${o.id}'" style="cursor:pointer">
+  <div style="font-size:13px;color:var(--dim)">#${o.id}</div>
+  <div>
+    <div style="font-size:13px;font-weight:600">${(o.items||[]).length} item(s)</div>
+    <div style="font-size:12px;color:var(--dim)">${new Date(o.created_at).toLocaleDateString()}</div>
+  </div>
+  <span class="status-badge status-${o.status}">${o.status.toUpperCase()}</span>
+  <div style="font-size:14px;font-weight:bold;color:var(--red)">₱${Number(o.total).toLocaleString()}</div>
+</div>`).join('')}
+</div>`;
+  } catch {
+    el.innerHTML = '<p style="color:var(--dim);padding:20px">Could not load orders.</p>';
+  }
+}
+
+async function renderAddressesTab(el) {
+  let addrs = [];
+  try { addrs = await Api.auth.addresses.list(); } catch {}
+
+  el.innerHTML = `<div class="panel">
+<div class="panel-title">📍 MY ADDRESSES</div>
+<div id="addrList">
+${addrs.map(a => `
+<div style="border:1px solid var(--dark4);border-radius:8px;padding:16px;margin-bottom:10px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+    <strong>${Components._esc(a.label)}</strong>
+    ${a.is_default ? '<span class="status-badge status-confirmed" style="font-size:10px">DEFAULT</span>' : ''}
+    <button class="btn-danger btn-sm" onclick="deleteAddr(${a.id})">Delete</button>
+  </div>
+  <div style="font-size:13px;color:var(--dim);line-height:1.8">
+    ${Components._esc(a.full_name)} • ${Components._esc(a.phone)}<br>
+    ${Components._esc(a.line1)}, ${Components._esc(a.city)}, ${Components._esc(a.province)} ${Components._esc(a.zip)}
+  </div>
+</div>`).join('')}
+</div>
+<button class="btn-outline w-full" onclick="showAddAddrForm()">+ Add New Address</button>
+<div id="addAddrForm" style="display:none;margin-top:16px">
+  <div class="form-row">
+    <div class="form-group"><label>Full Name</label><input id="na_name" class="form-control"></div>
+    <div class="form-group"><label>Phone</label><input id="na_phone" class="form-control"></div>
+  </div>
+  <div class="form-group"><label>Address</label><input id="na_line1" class="form-control"></div>
+  <div class="form-row">
+    <div class="form-group"><label>City</label><input id="na_city" class="form-control"></div>
+    <div class="form-group"><label>Province</label><input id="na_prov" class="form-control"></div>
+    <div class="form-group"><label>ZIP</label><input id="na_zip" class="form-control" style="max-width:80px"></div>
+  </div>
+  <button class="btn-primary" onclick="saveNewAddr()">Save Address</button>
+</div>
+</div>`;
+}
+
+function showAddAddrForm() {
+  const f = document.getElementById('addAddrForm');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveNewAddr() {
+  try {
+    await Api.auth.addresses.add({
+      full_name: document.getElementById('na_name').value.trim(),
+      phone:     document.getElementById('na_phone').value.trim(),
+      line1:     document.getElementById('na_line1').value.trim(),
+      city:      document.getElementById('na_city').value.trim(),
+      province:  document.getElementById('na_prov').value.trim(),
+      zip:       document.getElementById('na_zip').value.trim(),
+    });
+    showToast('Address saved!');
+    loadTab('addresses');
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function deleteAddr(id) {
+  if (!confirm('Delete this address?')) return;
+  try { await Api.auth.addresses.remove(id); loadTab('addresses'); } catch (err) { showToast(err.message, 'error'); }
+}
+
+function renderSecurityTab(el) {
+  el.innerHTML = `<div class="panel">
+<div class="panel-title">🔐 CHANGE PASSWORD</div>
+<div class="form-group"><label>Current Password</label><input type="password" id="cp_old"  class="form-control"></div>
+<div class="form-group"><label>New Password</label>    <input type="password" id="cp_new"  class="form-control"></div>
+<div class="form-group"><label>Confirm New</label>     <input type="password" id="cp_conf" class="form-control"></div>
+<div id="pwMsg" class="form-error"></div>
+<button class="btn-primary" onclick="changePassword()">Update Password</button>
+</div>`;
+}
+
+async function changePassword() {
+  const old  = document.getElementById('cp_old').value;
+  const nw   = document.getElementById('cp_new').value;
+  const conf = document.getElementById('cp_conf').value;
+  const msg  = document.getElementById('pwMsg');
+  if (nw !== conf) { msg.textContent = 'Passwords do not match.'; return; }
+  try {
+    await Api.auth.password({ currentPassword: old, newPassword: nw });
+    msg.style.color = 'var(--green)';
+    msg.textContent = 'Password updated successfully!';
+  } catch (err) { msg.textContent = err.message; }
+}
+
+init();
+</script>
+</body>
+</html>

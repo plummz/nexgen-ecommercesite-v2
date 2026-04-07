@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta name="description" content="John Rey's NexGen Shop — Pokémon figures, electronics, fashion and more. Free shipping on orders ₱500+."/>
+  <title>John Rey's NexGen Shop</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<div id="navbar-root"></div>
+
+<!-- HERO -->
+<div class="hero">
+  <video autoplay muted loop playsinline>
+    <source src="assets/animemix.mp4" type="video/mp4">
+  </video>
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <div class="hero-badge">🔥 MEGA SALE — UP TO 70% OFF</div>
+    <h1>JOHN REY'S <span>NEXGEN</span> SHOP</h1>
+    <p>Pokémon figures, electronics, fashion &amp; more — all in one place!</p>
+    <div class="hero-btns">
+      <button class="btn-primary"   onclick="location.href='products.html'">🛍️ Shop Now</button>
+      <button class="btn-secondary" onclick="location.href='deals.html'">⚡ Flash Deals</button>
+      <button class="btn-secondary" onclick="location.href='coupons.html'">🎟️ Coupons</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROMO STRIP -->
+<div class="promo-strip">
+  <div class="promo-item"><span class="icon">🚚</span><div><strong>Free Shipping</strong><br>Orders ₱500+</div></div>
+  <div class="promo-item"><span class="icon">✅</span><div><strong>100% Authentic</strong><br>Guaranteed</div></div>
+  <div class="promo-item"><span class="icon">🔄</span><div><strong>15-Day Returns</strong><br>Hassle-free</div></div>
+  <div class="promo-item"><span class="icon">🛡️</span><div><strong>Secure Checkout</strong><br>COD &amp; GCash</div></div>
+  <div class="promo-item"><span class="icon">📱</span><div><strong>Support</strong><br>09671756325</div></div>
+</div>
+
+<div class="page-wrap">
+
+  <!-- CATEGORIES -->
+  <div class="sec-header">
+    <div class="sec-title">🏪 SHOP BY CATEGORY</div>
+    <a href="products.html" class="sec-link">View All →</a>
+  </div>
+  <div class="cats-row" id="catCards"></div>
+
+  <hr class="divider" style="margin:30px 0">
+
+  <!-- FLASH SALE -->
+  <div class="flash-banner">
+    <div class="flash-left">
+      <h2>⚡ FLASH SALE</h2>
+      <p>Massive discounts — ends tonight at midnight!</p>
+    </div>
+    <div class="flash-timer">
+      <div class="timer-block"><span class="tnum" id="t-h">--</span><div class="tlbl">HRS</div></div>
+      <span class="timer-sep">:</span>
+      <div class="timer-block"><span class="tnum" id="t-m">--</span><div class="tlbl">MIN</div></div>
+      <span class="timer-sep">:</span>
+      <div class="timer-block"><span class="tnum" id="t-s">--</span><div class="tlbl">SEC</div></div>
+    </div>
+  </div>
+
+  <!-- FEATURED -->
+  <div class="sec-header">
+    <div class="sec-title">🔥 FEATURED PRODUCTS</div>
+    <a href="products.html" class="sec-link">View All →</a>
+  </div>
+  <div class="products-grid" id="featuredGrid">
+    <div class="loading-center"><div class="spinner"></div></div>
+  </div>
+
+  <hr class="divider" style="margin:30px 0">
+
+  <!-- POKEMON -->
+  <div class="sec-header">
+    <div class="sec-title">🎮 POKÉMON FIGURES</div>
+    <a href="products.html?cat=pokemon" class="sec-link">View All →</a>
+  </div>
+  <div class="products-grid" id="pokemonGrid">
+    <div class="loading-center"><div class="spinner"></div></div>
+  </div>
+
+  <hr class="divider" style="margin:30px 0">
+
+  <!-- ELECTRONICS -->
+  <div class="sec-header">
+    <div class="sec-title">💻 ELECTRONICS</div>
+    <a href="products.html?cat=phones" class="sec-link">View All →</a>
+  </div>
+  <div class="products-grid" id="techGrid">
+    <div class="loading-center"><div class="spinner"></div></div>
+  </div>
+
+</div>
+
+<div id="footer-root"></div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/components.js"></script>
+<script>
+(async function() {
+  await Components.init('home');
+
+  // Category cards
+  try {
+    const cats = await Api.products.categories();
+    document.getElementById('catCards').innerHTML = cats.map(c =>
+      `<a class="cat-card" href="products.html?cat=${c.slug}">
+        <span class="cc-icon">${c.icon}</span>
+        <span class="cc-name">${c.name}</span>
+      </a>`
+    ).join('');
+  } catch { document.getElementById('catCards').innerHTML = ''; }
+
+  // Wishlist IDs (for heart state)
+  let wlIds = [];
+  try { if (Auth.isLoggedIn()) wlIds = await Api.wishlist.ids(); } catch {}
+
+  // Product grids
+  async function fillGrid(elId, params, limit=8) {
+    const el = document.getElementById(elId);
+    try {
+      const { products } = await Api.products.list({ ...params, limit });
+      el.innerHTML = products.length
+        ? products.map(p => Components.buildProductCard(p, wlIds)).join('')
+        : '<div class="empty-state"><p>No products found.</p></div>';
+    } catch {
+      el.innerHTML = '<div class="empty-state"><p>Could not load products.</p></div>';
+    }
+  }
+
+  await Promise.all([
+    fillGrid('featuredGrid', { sort:'popular', badge:'HOT' }),
+    fillGrid('pokemonGrid',  { cat:'pokemon', sort:'popular' }),
+    fillGrid('techGrid',     { sort:'popular' }),
+  ]);
+
+  // Countdown
+  function tick() {
+    const now = new Date(), mid = new Date(now);
+    mid.setHours(24,0,0,0);
+    let d = Math.floor((mid-now)/1000);
+    const h = Math.floor(d/3600); d%=3600;
+    const m = Math.floor(d/60);   const s = d%60;
+    const pad = n => String(n).padStart(2,'0');
+    document.getElementById('t-h').textContent = pad(h);
+    document.getElementById('t-m').textContent = pad(m);
+    document.getElementById('t-s').textContent = pad(s);
+  }
+  tick(); setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

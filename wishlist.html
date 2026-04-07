@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Wishlist — NexGen Shop</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div id="navbar-root"></div>
+<div class="page-wrap">
+  <div class="breadcrumb"><a href="index.html">Home</a> › <span>Wishlist</span></div>
+  <div class="sec-header">
+    <div class="sec-title">♡ MY WISHLIST</div>
+    <a href="products.html" class="sec-link">← Continue Shopping</a>
+  </div>
+  <div id="wishlistRoot">
+    <div class="loading-center"><div class="spinner"></div></div>
+  </div>
+</div>
+<div id="footer-root"></div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/components.js"></script>
+<script>
+async function init() {
+  await Components.init('wishlist');
+  if (!Auth.isLoggedIn()) {
+    document.getElementById('wishlistRoot').innerHTML = `
+<div class="empty-state">
+  <div class="empty-icon">♡</div>
+  <h3>Login to View Wishlist</h3>
+  <a href="profile.html?redirect=wishlist.html" class="btn-primary">Login / Register</a>
+</div>`; return;
+  }
+  try {
+    const items = await Api.wishlist.get();
+    const wlIds = items.map(i => i.product_id);
+    document.getElementById('wishlistRoot').innerHTML = items.length
+      ? `<div class="products-grid">${items.map(i => Components.buildProductCard({
+          id: i.product_id, name: i.name, slug: i.slug, price: i.price,
+          original_price: i.original_price, image: i.image, badge: i.badge,
+          rating: i.rating, sold_count: i.sold_count, stock: i.stock, category: i.category,
+        }, wlIds)).join('')}</div>`
+      : `<div class="empty-state">
+           <div class="empty-icon">♡</div>
+           <h3>Wishlist is Empty</h3>
+           <p>Save products you love and come back later.</p>
+           <a href="products.html" class="btn-primary">🛍️ Browse Products</a>
+         </div>`;
+  } catch {
+    document.getElementById('wishlistRoot').innerHTML = '<p style="color:var(--dim);text-align:center;padding:40px">Could not load wishlist.</p>';
+  }
+}
+init();
+</script>
+</body>
+</html>
