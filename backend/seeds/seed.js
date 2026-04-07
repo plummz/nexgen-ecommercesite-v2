@@ -2,13 +2,15 @@ require('dotenv').config();
 const { Pool } = require('pg');
 const bcrypt   = require('bcryptjs');
 
-const pool = new Pool({
-  host:     process.env.DB_HOST     || 'localhost',
-  port:     parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME     || 'nexgen_shop',
-  user:     process.env.DB_USER     || 'postgres',
-  password: process.env.DB_PASSWORD || '',
-});
+const pool = process.env.DATABASE_URL
+  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  : new Pool({
+      host:     process.env.DB_HOST || process.env.PGHOST     || 'localhost',
+      port:     parseInt(process.env.DB_PORT || process.env.PGPORT || '5432'),
+      database: process.env.DB_NAME || process.env.PGDATABASE || 'nexgen_shop',
+      user:     process.env.DB_USER || process.env.PGUSER     || 'postgres',
+      password: process.env.DB_PASSWORD || process.env.PGPASSWORD || '',
+    });
 
 const CATEGORIES = [
   { slug:'pokemon',    name:'Pokémon Figures', icon:'🎮', sort_order:1 },
