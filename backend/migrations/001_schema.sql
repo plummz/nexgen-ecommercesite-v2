@@ -1,10 +1,7 @@
 -- NexGen E-Commerce V2 — PostgreSQL Schema
 -- Run: psql -U postgres -d nexgen_shop -f migrations/001_schema.sql
 
--- ─────────────────────────────────────────
--- EXTENSIONS
--- ─────────────────────────────────────────
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Extensions removed for Railway compatibility (uuid-ossp, pg_trgm)
 
 -- ─────────────────────────────────────────
 -- USERS
