@@ -1,0 +1,25 @@
+{
+  "name": "John Rey's NexGen Shop",
+  "short_name": "NexGen Shop",
+  "description": "Pokémon figures, electronics, fashion and more. Free shipping on orders ₱500+.",
+  "start_url": "/nexgen-ecommercesite-v2/index.html",
+  "scope": "/nexgen-ecommercesite-v2/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0d0d",
+  "theme_color": "#e63946",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
