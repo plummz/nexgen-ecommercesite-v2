@@ -249,8 +249,13 @@ async function seed() {
     throw err;
   } finally {
     client.release();
-    await pool.end();
+    // Only end the pool if running standalone
+    if (require.main === module) await pool.end();
   }
 }
 
-seed().catch(() => process.exit(1));
+if (require.main === module) {
+  seed().catch(() => process.exit(1));
+}
+
+module.exports = seed;

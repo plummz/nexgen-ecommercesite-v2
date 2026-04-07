@@ -3,7 +3,9 @@ const express     = require('express');
 const cors        = require('cors');
 const helmet      = require('helmet');
 const path        = require('path');
+const fs          = require('fs');
 const rateLimit   = require('express-rate-limit');
+const db          = require('./config/db');
 
 const app = express();
 
@@ -67,10 +69,42 @@ app.use((err, req, res, next) => {
   res.status(status).json({ error: msg });
 });
 
+async function runMigrations() {
+  const migrationPath = path.join(__dirname, '../migrations/001_schema.sql');
+  if (!fs.existsSync(migrationPath)) return;
+  try {
+    const sql = fs.readFileSync(migrationPath, 'utf8');
+    await db.query(sql);
+    console.log('[DB] Schema migration applied.');
+  } catch (err) {
+    console.error('[DB] Migration error:', err.message);
+  }
+}
+
+async function runSeeds() {
+  try {
+    const { rows } = await db.query("SELECT COUNT(*) FROM users WHERE role='admin'");
+    if (parseInt(rows[0].count) === 0) {
+      console.log('[DB] No admin found — running seeds...');
+      const seed = require('../seeds/seed');
+      await seed();
+      console.log('[DB] Seeds complete.');
+    } else {
+      console.log('[DB] Seeds already applied, skipping.');
+    }
+  } catch (err) {
+    console.error('[DB] Seed error (non-fatal):', err.message);
+  }
+}
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`NexGen API v2 running on http://localhost:${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+(async () => {
+  await runMigrations();
+  await runSeeds();
+  app.listen(PORT, () => {
+    console.log(`NexGen API v2 running on http://localhost:${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+})();
 
 module.exports = app;
