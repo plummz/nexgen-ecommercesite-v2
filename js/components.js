@@ -3,6 +3,11 @@
 //  Inject with: Components.init()
 // ============================================================
 
+// Detect base path for GitHub Pages (e.g. /nexgen-ecommercesite-v2) or empty string for localhost
+var _BASE = window.location.hostname.includes('github.io')
+  ? '/' + window.location.pathname.split('/')[1]
+  : '';
+
 const Components = {
   // ── Cart count (backed by API when logged in, localStorage fallback) ──
   _cartCount: 0,
@@ -33,7 +38,7 @@ const Components = {
   📱 09671756325 &nbsp;•&nbsp; Use code <strong>WELCOME50</strong> for ₱50 off!
 </div>
 <nav class="navbar">
-  <a href="/index.html" class="nav-logo">JOHN REY'S <span>NEXGEN</span></a>
+  <a href="${_BASE}/index.html" class="nav-logo">JOHN REY'S <span>NEXGEN</span></a>
   <div class="nav-search">
     <input type="text" id="searchInput" placeholder="Search products, brands, categories..."
            onkeydown="if(event.key==='Enter')doSearch()" autocomplete="off"/>
@@ -41,18 +46,18 @@ const Components = {
     <div class="search-dropdown" id="searchDropdown"></div>
   </div>
   <div class="nav-icons">
-    <a href="/deals.html"    class="nav-icon ${activePage==='deals'?'active':''}"><span class="icon">🔥</span><span>Deals</span></a>
-    <a href="/wishlist.html" class="nav-icon ${activePage==='wishlist'?'active':''}"><span class="icon">♡</span><span>Wishlist</span></a>
-    <a href="/cart.html"     class="nav-icon ${activePage==='cart'?'active':''}">
+    <a href="${_BASE}/deals.html"    class="nav-icon ${activePage==='deals'?'active':''}"><span class="icon">🔥</span><span>Deals</span></a>
+    <a href="${_BASE}/wishlist.html" class="nav-icon ${activePage==='wishlist'?'active':''}"><span class="icon">♡</span><span>Wishlist</span></a>
+    <a href="${_BASE}/cart.html"     class="nav-icon ${activePage==='cart'?'active':''}">
       <span class="icon">🛒</span>
       <div id="cart-badge" style="display:none">0</div>
       <span>Cart</span>
     </a>
-    <a href="${user ? '/profile.html' : '/profile.html'}" class="nav-icon ${activePage==='profile'?'active':''}">
+    <a href="${_BASE}/profile.html" class="nav-icon ${activePage==='profile'?'active':''}">
       <span class="icon">👤</span>
       <span id="nav-user-label">${user ? user.name.split(' ')[0] : 'Login'}</span>
     </a>
-    ${Auth.isAdmin() ? `<a href="/admin/index.html" class="nav-icon nav-admin"><span class="icon">⚙️</span><span>Admin</span></a>` : ''}
+    ${Auth.isAdmin() ? `<a href="${_BASE}/admin/index.html" class="nav-icon nav-admin"><span class="icon">⚙️</span><span>Admin</span></a>` : ''}
   </div>
 </nav>
 <div class="cat-nav" id="catNav"></div>`;
@@ -73,26 +78,26 @@ const Components = {
     </div>
     <div class="footer-col">
       <h4>Shop</h4>
-      <a href="/products.html?cat=pokemon">Pokémon Figures</a>
-      <a href="/products.html?cat=phones">Phones</a>
-      <a href="/products.html?cat=laptops">Laptops</a>
-      <a href="/products.html?cat=gaming">Gaming</a>
-      <a href="/deals.html">Flash Deals</a>
+      <a href="${_BASE}/products.html?cat=pokemon">Pokémon Figures</a>
+      <a href="${_BASE}/products.html?cat=phones">Phones</a>
+      <a href="${_BASE}/products.html?cat=laptops">Laptops</a>
+      <a href="${_BASE}/products.html?cat=gaming">Gaming</a>
+      <a href="${_BASE}/deals.html">Flash Deals</a>
     </div>
     <div class="footer-col">
       <h4>Account</h4>
-      <a href="/profile.html">My Profile</a>
-      <a href="/cart.html">My Cart</a>
-      <a href="/wishlist.html">Wishlist</a>
-      <a href="/profile.html#orders">My Orders</a>
-      <a href="/coupons.html">Coupons</a>
+      <a href="${_BASE}/profile.html">My Profile</a>
+      <a href="${_BASE}/cart.html">My Cart</a>
+      <a href="${_BASE}/wishlist.html">Wishlist</a>
+      <a href="${_BASE}/profile.html#orders">My Orders</a>
+      <a href="${_BASE}/coupons.html">Coupons</a>
     </div>
     <div class="footer-col">
       <h4>Help</h4>
-      <a href="/faq.html">FAQ</a>
-      <a href="/about.html">About Us</a>
-      <a href="/faq.html#shipping">Shipping Info</a>
-      <a href="/faq.html#returns">Return Policy</a>
+      <a href="${_BASE}/faq.html">FAQ</a>
+      <a href="${_BASE}/about.html">About Us</a>
+      <a href="${_BASE}/faq.html#shipping">Shipping Info</a>
+      <a href="${_BASE}/faq.html#returns">Return Policy</a>
     </div>
   </div>
   <div class="footer-bottom">
@@ -111,7 +116,7 @@ const Components = {
       const params = new URLSearchParams(window.location.search);
       const active = params.get('cat') || '';
       el.innerHTML = [{ slug:'all', name:'All Products', icon:'🏪' }, ...cats].map(c =>
-        `<a class="cat-link${c.slug===active?' active':''}" href="/products.html?cat=${c.slug}">${c.icon} ${c.name}</a>`
+        `<a class="cat-link${c.slug===active?' active':''}" href="${_BASE}/products.html?cat=${c.slug}">${c.icon} ${c.name}</a>`
       ).join('');
     } catch { /* silently fail if API is down */ }
   },
@@ -136,11 +141,11 @@ const Components = {
     const disc = p.original_price ? Math.round((1 - p.price / p.original_price) * 100) : 0;
     const stars = this._stars(p.rating);
     const imgBase = p.image ? p.image.replace(/\.(png|jpg|jpeg)$/i,'') : '';
-    const imgSrc  = imgBase ? `/assets/${imgBase}.webp` : '';
-    const imgFall = p.image ? `/assets/${p.image}` : '';
+    const imgSrc  = imgBase ? `${_BASE}/assets/${imgBase}.webp` : '';
+    const imgFall = p.image ? `${_BASE}/assets/${p.image}` : '';
     return `
 <div class="product-card" data-id="${p.id}">
-  <a href="/product.html?id=${p.id}" class="card-img-link">
+  <a href="${_BASE}/product.html?id=${p.id}" class="card-img-link">
     <div class="card-img">
       ${imgSrc
         ? `<picture>
@@ -163,7 +168,7 @@ const Components = {
     ${wishlisted ? '♥' : '♡'}
   </button>
   <div class="card-body">
-    <a href="/product.html?id=${p.id}" class="card-name">${this._esc(p.name)}</a>
+    <a href="${_BASE}/product.html?id=${p.id}" class="card-name">${this._esc(p.name)}</a>
     <div class="card-rating">${stars} <span>${p.rating} (${Number(p.sold_count).toLocaleString()} sold)</span></div>
     <div class="card-price">
       <span class="price-now">₱${Number(p.price).toLocaleString()}</span>
@@ -180,7 +185,7 @@ const Components = {
 
   async quickAdd(productId) {
     if (!Auth.isLoggedIn()) {
-      window.location.href = `/profile.html?redirect=${encodeURIComponent(window.location.href)}`;
+      window.location.href = `${_BASE}/profile.html?redirect=${encodeURIComponent(window.location.href)}`;
       return;
     }
     try {
@@ -201,7 +206,7 @@ const Components = {
 
   async toggleWishlist(productId, btn) {
     if (!Auth.isLoggedIn()) {
-      window.location.href = `/profile.html?redirect=${encodeURIComponent(window.location.href)}`;
+      window.location.href = `${_BASE}/profile.html?redirect=${encodeURIComponent(window.location.href)}`;
       return;
     }
     try {
@@ -260,7 +265,7 @@ const Components = {
 // Global search function used by navbar
 function doSearch() {
   const q = document.getElementById('searchInput')?.value.trim();
-  if (q) window.location.href = `/products.html?q=${encodeURIComponent(q)}`;
+  if (q) window.location.href = `${_BASE}/products.html?q=${encodeURIComponent(q)}`;
 }
 
 // Show toast globally

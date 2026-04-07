@@ -31,7 +31,7 @@ const Auth = {
 
   logout() {
     this.clearSession();
-    window.location.href = '/index.html';
+    window.location.href = _BASE + '/index.html';
   },
 
   requireLogin(redirect = window.location.href) {
@@ -44,7 +44,7 @@ const Auth = {
 
   requireAdmin() {
     if (!this.isAdmin()) {
-      window.location.href = '/index.html';
+      window.location.href = _BASE + '/index.html';
       return false;
     }
     return true;
