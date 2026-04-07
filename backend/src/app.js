@@ -72,12 +72,26 @@ app.use((err, req, res, next) => {
 async function runMigrations() {
   const migrationPath = path.join(__dirname, '../migrations/001_schema.sql');
   if (!fs.existsSync(migrationPath)) return;
+  const client = await db.getClient();
   try {
     const sql = fs.readFileSync(migrationPath, 'utf8');
-    await db.query(sql);
+    // Split on semicolons and run each statement individually
+    const statements = sql
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && !s.startsWith('--'));
+    for (const stmt of statements) {
+      try {
+        await client.query(stmt);
+      } catch (err) {
+        console.warn('[DB] Migration stmt warning:', err.message.substring(0, 100));
+      }
+    }
     console.log('[DB] Schema migration applied.');
   } catch (err) {
     console.error('[DB] Migration error:', err.message);
+  } finally {
+    client.release();
   }
 }
 

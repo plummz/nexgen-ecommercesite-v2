@@ -5,7 +5,6 @@
 -- EXTENSIONS
 -- ─────────────────────────────────────────
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- fuzzy search
 
 -- ─────────────────────────────────────────
 -- USERS
@@ -76,7 +75,7 @@ CREATE TABLE IF NOT EXISTS products (
 );
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_active   ON products(is_active);
-CREATE INDEX IF NOT EXISTS idx_products_name_trgm ON products USING gin (name gin_trgm_ops);
+-- Full-text index (pg_trgm not required; ILIKE used for search)
 
 -- ─────────────────────────────────────────
 -- PRODUCT VARIATIONS
