@@ -1,0 +1,11 @@
+{
+  "name": "nexgen-ecommercesite-v2",
+  "version": "2.0.0",
+  "scripts": {
+    "start": "node backend/src/app.js",
+    "install": "cd backend && npm install"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
